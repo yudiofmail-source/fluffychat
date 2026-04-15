@@ -1,0 +1,54 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build_macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: .tool_versions.yaml
+          cache: true
+
+      - name: Use Xcode 16.4
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - run: brew install sqlcipher
+      - run: flutter pub get
+
+      # 解决 WebRTC-SDK 版本冲突
+      - name: Resolve CocoaPods dependencies
+        run: |
+          cd macos
+          rm -f Podfile.lock
+          pod install --repo-update
+
+      # 禁用代码签名（CI 上没有 Apple Developer 证书）
+      - name: Disable code signing
+        run: |
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/g' macos/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' macos/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = 4NXF6Z997G;/DEVELOPMENT_TEAM = "";/g' macos/Runner.xcodeproj/project.pbxproj
+
+      - run: flutter build macos --release
+
+      - name: Create archive
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../../fluffychat-macos.zip FluffyChat.app
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: fluffychat-macos
+          path: fluffychat-macos.zip
