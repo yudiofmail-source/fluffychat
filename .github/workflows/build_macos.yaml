@@ -52,3 +52,16 @@ jobs:
         with:
           name: fluffychat-macos
           path: fluffychat-macos.zip
+
+      # 上传到 GitHub Release（永久保留，下载更快）
+      - name: Upload to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="latest"
+          fi
+          gh release view "$VERSION" > /dev/null 2>&1 || gh release create "$VERSION" --title "$VERSION" --notes "macOS build for $VERSION" --prerelease
+          gh release upload "$VERSION" fluffychat-macos.zip --clobber
