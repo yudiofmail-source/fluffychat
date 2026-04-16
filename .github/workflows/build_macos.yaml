@@ -40,15 +40,7 @@ jobs:
 
       - run: flutter build macos --release
 
-      # CI 上先 ad-hoc 签名，避免用户机器上 launchd 直接拒绝
-      - name: Ad-hoc sign app
-        run: |
-          APP="build/macos/Build/Products/Release/FluffyChat.app"
-          codesign --remove-signature "$APP" 2>/dev/null || true
-          find "$APP" -depth -exec codesign --force --sign - {} + 2>/dev/null
-          codesign --force --sign - "$APP"
-
-      # 用 tar.gz 保留 symlink 和签名
+      # 用 tar.gz 保留 symlink
       - name: Create archive
         run: |
           cd build/macos/Build/Products/Release
