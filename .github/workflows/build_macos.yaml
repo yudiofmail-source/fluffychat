@@ -26,14 +26,12 @@ jobs:
       - run: brew install sqlcipher
       - run: flutter pub get
 
-      # 解决 WebRTC-SDK 版本冲突
       - name: Resolve CocoaPods dependencies
         run: |
           cd macos
           rm -f Podfile.lock
           pod install --repo-update
 
-      # 禁用代码签名（CI 上没有 Apple Developer 证书）
       - name: Disable code signing
         run: |
           sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/g' macos/Runner.xcodeproj/project.pbxproj
@@ -42,18 +40,26 @@ jobs:
 
       - run: flutter build macos --release
 
+      # CI 上先 ad-hoc 签名，避免用户机器上 launchd 直接拒绝
+      - name: Ad-hoc sign app
+        run: |
+          APP="build/macos/Build/Products/Release/FluffyChat.app"
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          find "$APP" -depth -exec codesign --force --sign - {} + 2>/dev/null
+          codesign --force --sign - "$APP"
+
+      # 用 tar.gz 保留 symlink 和签名
       - name: Create archive
         run: |
           cd build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent FluffyChat.app ../../../../../fluffychat-macos.zip
+          tar czvf ../../../../../fluffychat-macos.tar.gz FluffyChat.app
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
           name: fluffychat-macos
-          path: fluffychat-macos.zip
+          path: fluffychat-macos.tar.gz
 
-      # 上传到 GitHub Release（永久保留，下载更快）
       - name: Upload to Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,4 +70,4 @@ jobs:
             VERSION="latest"
           fi
           gh release view "$VERSION" > /dev/null 2>&1 || gh release create "$VERSION" --title "$VERSION" --notes "macOS build for $VERSION" --prerelease
-          gh release upload "$VERSION" fluffychat-macos.zip --clobber
+          gh release upload "$VERSION" fluffychat-macos.tar.gz --clobber
